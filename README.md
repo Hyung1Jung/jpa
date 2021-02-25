@@ -154,6 +154,220 @@ JPA는 특정 데이터베이스에 종속적이지 않은 기술.다른 데이�
 - 개발시에는 create가, 운영시에는 auto 설정을 빼거나 validate 정도로 두는 것이 좋아 보인다.
   update로 둘 경우에, 개발자들의 스키마가 마구 꼬여서 결국은 drop 해서 새로 만들어야 하는 사태가 발생한다
 
+## 2.6 애플리케이션 개발
+
+```java
+package jpabook.start;
+
+import javax.persistence.*;
+import java.util.List;
+
+public class JpaMain {
+
+    public static void main(String[] args) {
+
+        //엔티티 매니저 팩토리 생성
+        EntityManagerFactory emf = Persistence.createEntityManagerFactory("jpabook");
+        EntityManager em = emf.createEntityManager(); //엔티티 매니저 생성
+
+        EntityTransaction tx = em.getTransaction(); //트랜잭션 기능 획득
+
+        try {
+
+            tx.begin(); //트랜잭션 시작
+            logic(em);  //비즈니스 로직
+            tx.commit();//트랜잭션 커밋
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            tx.rollback(); //트랜잭션 롤백
+        } finally {
+            em.close(); //엔티티 매니저 종료
+        }
+
+        emf.close(); //엔티티 매니저 팩토리 종료
+    }
+
+    public static void logic(EntityManager em) {
+
+        String id = "id1";
+        Member member = new Member();
+        member.setId(id);
+        member.setUsername("지한");
+        member.setAge(2);
+
+        //등록
+        em.persist(member);
+
+        //수정
+        member.setAge(20);
+
+        //한 건 조회
+        Member findMember = em.find(Member.class, id);
+        System.out.println("findMember=" + findMember.getUsername() + ", age=" + findMember.getAge());
+
+        //목록 조회
+        List<Member> members = em.createQuery("select m from Member m", Member.class).getResultList();
+        System.out.println("members.size=" + members.size());
+
+        //삭제
+        em.remove(member);
+
+    }
+}
+```
+
+코드 구성
+- 엔티티 매니저 설정
+- 트랜잭션 관리
+- 비지니스 로직
+
+### 2.6.1 엔티티 매니저 설정
+
+![1](https://user-images.githubusercontent.com/43127088/109125852-e91db900-778f-11eb-80be-15fcd1b0f195.PNG)
+
+**엔티티 매니저 팩토리 생성**
+
+- persistence.xml의 설정 정보를 사용해서 엔티티 매니저 팩토리 생성.
+- Persistence 클래스 사용.
+- Persistence 클래스 : 엔티티 매니저 팩토리를 생성해서 JPA를 사용할 수 있게 준비.
+```java
+EntityManagerFactory emf = Persistence.createEntityManagerFactory("jpabook");
+```
+`META-INF/persistence.xml에서 이름이 "jpabook"인 영속성 유닛을 찾아서 엔티티 매니저 팩토리를 생성.`
+  
+- 설정 정보 읽기.
+- JPA 동작을 위한 기반 객체 만들기.
+- JPA 구현체에 따라 데이터베이스 커넥션 풀도 생성.
+- 비용이 아주 크다.
+
+따라서 `엔티티 매니저 팩토리는 어플리케이션 전체에 딱 한 번만 생성하고 공유해서 사용해야 한다.`
+
+
+**엔티티 매니저 생성**
+
+```java
+EntityManager em = emf.createEntityManager();
+```
+
+- 엔티티 매니저를 사용해서 엔티티를 데이터베이스에 등록/수정/삭제/조회할 수 있다.
+- 엔티티 매니저는 데이터베이스 커넥션과 밀접한 관계가 있으므로 스레드간에 공유하거나 재사용하면 안된다.
+  
+**종료**
+사용이 끝난 엔티티 매니저는 반드시 종료
+```java
+em.close();     // 엔티티 매니저 종료
+```
+어플리케이션을 종료할 때 엔티티 매니저 팩토리도 종료
+```java
+emf.close();    // 엔티티 매니저 팩토리 종료
+```
+
+### 2.6.2 트랜잭션 관리
+JPA를 사용하면 항상 트랜잭션 안에서 데이터를 변경해야 한다.
+트랜잭션 없이 데이터를 변경하면 예외가 발생한다.
+트랜잭션을 시작하려면 엔티티 매니저에서 트랜잭션 API를 받아와야 한다.
+
+```java
+EntityTransaction tx = em.getTransaction(); //트랜잭션 API
+try {
+
+     tx.begin(); //트랜잭션 시작
+     logic(em);  //비즈니스 로직
+     tx.commit();//트랜잭션 커밋
+
+} catch (Exception e) {
+      tx.rollback(); //트랜잭션 롤백
+}
+```
+x트랜잭션 API를 사용해서 비즈니스 로직이 정상 작동하면 트랜잭션을 커밋하고 에외가 발생하면 트랜잭션을 롤백한다.
+
+### 2.6.3 비즈니스 로직
+회원 엔티티를 하나 생성한 다음 엔티티 매니저를 통해 데이터베이스에 등록, 수정, 삭제, 조회
+
+```java
+String id = "id1";
+Member member = new Member();
+member.setId(id);
+member.setUsername("지한");
+member.setAge(2);
+
+//등록
+em.persist(member);
+
+//수정
+member.setAge(20);
+
+//한 건 조회
+Member findMember = em.find(Member.class, id);
+System.out.println("findMember=" + findMember.getUsername() + ", age=" + findMember.getAge());
+
+//목록 조회
+List<Member> members = em.createQuery("select m from Member m", Member.class).getResultList();
+System.out.println("members.size=" + members.size());
+
+//삭제
+em.remove(member);
+```
+
+`수정`
+
+- em.update()를 호출할 것 같은데 없다.
+- 단순하게 엔티티의 값만 변경.
+- JPA는 어떤 엔티티가 변경되었는지 추적하는 기능을 갖추고 있음.
+```sql
+UPDATE MEMBER 
+    SET AGE = 20, NAME = '지한'
+WHERE ID = 'id1'    
+```
+
+`삭제`
+
+엔티티 매니저의 remve() 메소드에 삭제하려는 엔티티를 넘겨준다. JPA는 다음 DELETE SQL을 생성해서 실행한다.
+```sql
+DELETE FROM MEMBER WHERE ID = 'id1'
+```
+
+`한 건 조회`
+find() 메소드는 조회할 엔티티 타입과 @ID로 데이터베이스 테이블의 기본 키와 매핑한 식별자의 값으로 엔티티 하나를 조회하는 가장 단순한
+조회 메소드다. 이 메소드를 호출하면 다음 SELECT SQL을 생성해서 데이터베이스에 결과를 조회한다. 그리고 조회한 결과 값으로 엔티티를
+생성해서 반환한다.
+```sql
+SELECT * FROM MEMBER WHERE ID = `id1`
+```
+
+### 2.6.4 JPQL
+
+하나 이상의 회원 목록 조회하는 코드  
+
+```java
+//목록 조회
+List<Member> members = em.createQuery("select m from Member m", Member.class).getResultList();
+System.out.println("members.size=" + members.size());
+```
+
+**문제점**
+- 엔티티 대상으로 검색해야 함.
+- 그러나 테이블이 아닌 엔티티 객체를 대상으로 검색하려면 데이터베이스 모든 데이터를 어플리케이션으로 불러와 엔티티 객체로 변경해서 검색해야 함.
+
+**해결**
+JPA는 *JPQL(Java Persistence Query Language)*라는 쿼리 언어로 해결.
+
+**차이점**
+JPQL : 엔티티 객체를 대상으로 쿼리. (클래스와 필드)
+SQL : 데이터베이스 테이블을 대상으로 쿼리.
+
+**샘플**
+`select m from Member m`
+- JPQL 표현
+- from Member는 MEMBER 테이블이 아닌 Member 회원 엔티티 객체
+- JPQL은 데이터베이스 테이블을 전혀 알지 못한다.
+- JPA는 JPQL을 분석, 적절한 SQL을 만들어 데이터베이스에 데이터 조회.
+- JPQL은 대소문자를 구분.
+`SELECT M.ID, M.NAME, M.AGE FROM MEMBER M`
+
+
+
   </div>
 </details>
 
