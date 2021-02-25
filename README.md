@@ -347,23 +347,29 @@ System.out.println("members.size=" + members.size());
 ```
 
 **문제점**
+
 - 엔티티 대상으로 검색해야 함.
 - 그러나 테이블이 아닌 엔티티 객체를 대상으로 검색하려면 데이터베이스 모든 데이터를 어플리케이션으로 불러와 엔티티 객체로 변경해서 검색해야 함.
 
 **해결**
+
 JPA는 *JPQL(Java Persistence Query Language)*라는 쿼리 언어로 해결.
 
 **차이점**
+
 JPQL : 엔티티 객체를 대상으로 쿼리. (클래스와 필드)
 SQL : 데이터베이스 테이블을 대상으로 쿼리.
 
 **샘플**
+
 `select m from Member m`
+
 - JPQL 표현
 - from Member는 MEMBER 테이블이 아닌 Member 회원 엔티티 객체
 - JPQL은 데이터베이스 테이블을 전혀 알지 못한다.
 - JPA는 JPQL을 분석, 적절한 SQL을 만들어 데이터베이스에 데이터 조회.
 - JPQL은 대소문자를 구분.
+
 `SELECT M.ID, M.NAME, M.AGE FROM MEMBER M`
 
 
