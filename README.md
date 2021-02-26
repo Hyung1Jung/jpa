@@ -254,6 +254,7 @@ EntityManager em = emf.createEntityManager();
 - 엔티티 매니저는 데이터베이스 커넥션과 밀접한 관계가 있으므로 스레드간에 공유하거나 재사용하면 안된다.
   
 **종료**
+
 사용이 끝난 엔티티 매니저는 반드시 종료
 ```java
 em.close();     // 엔티티 매니저 종료
