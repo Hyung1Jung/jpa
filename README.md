@@ -862,7 +862,7 @@ Member mergeMember = em.merge(member);
 4. 조회한 영속 엔티티(mergeMember)에 member 엔티티의 값을 채워 넣는다.(member 엔티티의 모든 값을 mergeMember에 밀어넣는다. 이때 mergeMember의 "회원1"이라는 이름이 "회원명 변경"으로 바뀐다.
 5. mergeMember를 반환.
 
-비영속 병합
+**비영속 병합**
 ```java
 Member member = new Member();
 Member newMember = em.merge(member);    //비영속 병합
@@ -894,6 +894,7 @@ tx.commit();
 ![4](https://user-images.githubusercontent.com/43127088/109282581-0cfcff80-7861-11eb-90b7-7a139fc2862c.PNG)
 
 
+
   </div>
 </details>
 
@@ -901,8 +902,260 @@ tx.commit();
   <summary>4.엔티티 매핑</summary>
   <div markdown="1">
 
+## 4. 엔티티 매핑
+
+대표적인 매핑 어노테이션
+
+XML에 기입해도 되지만 어노테이션 방식이 좀 더 쉽고 직관적
+
+객체와 테이블 매핑 : @Entity, @Table
+기본 키 매핑 : @Id
+필드와 컬럼 매핑 : @Column
+연관관계 매핑 : @ManyToOne, @JoinColumn
+
+### 4.1 Entity
+
+JPA를 사용해서 테이블과 매핑할 클래스는 @Entity 어노테이션을 필수로 붙여야 한다.
+
+@Entity가 붙은 클래스는 JPA가 관리.
+
+**@Entity 적용시 주의사항**
+
+- 기본 생성자는 필수. (파라미터가 없는 public 또는 protected 생성자)
+- final 클래스, enum, interface, inner 클래스에는 사용할 수 없다.
+- 저장할 필드에 final을 사용하면 안된다
+
+JPA가 엔티티 객체를 생성할 때 기본 생성자를 사용하므로 이 생성자는 반드시 있어야 한다. 자바는 생성자가 하나도 없으면 다음과 같은 기본
+셍성자를 자동으로 만든다.
+
+```java
+public Member() {}  // 기본 생성자
+```
+
+문제는 다음과 같이 생성자를 하나 이상 만들면 자바는 기본 생성자를 자동으로 만들지 않는다. 이때는 기본 생성자를 직접 만들어야 한다.
+
+```java
+public Member() {}  // 기본 생성자
+
+public Member(String name) {
+    this.name = name;
+}
+```
+
+### 4.2 @Table
+
+엔티티와 매핑할 테이블을 지정한다.
+
+```java
+@Entity
+@Table(name="MEMBER")
+public class Member {
+    ...
+}
+```
+
+### 4.3 다양한 매핑 사용
+
+```java
+package jpabook.start;
+
+import javax.persistence.*;  
+import java.util.Date;
+
+@Entity
+@Table(name="MEMBER")
+public class Member {
+
+    @Id
+    @Column(name = "ID")
+    private String id;
+
+    @Column(name = "NAME", nullable = false, length = 10) //추가
+    private String username;
+
+    private Integer age;
+
+    @Enumerated(EnumType.STRING)
+    private RoleType roleType;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date createdDate;
+
+    @Temporal(TemporalType.TIMESTAMP)
+    private Date lastModifiedDate;
+
+    @Lob
+    private String description;
+
+    @Transient
+    private String temp;
+
+    //Getter, Setter
+
+    ...
+}
+
+
+package jpabook.start;
+
+public enum RoleType {
+    ADMIN, USER
+}
+```
+
+코드 설명
+
+1. roleType : 자바의 enum을 사용해서 회원 타입을 구분. 자바의 enum을 사용하려면 @Enumerated 어노테이션으로 매핑.
+2. createDate, lastModifiedDate : 자바의 날짜 타입은 @Temporal을 사용해서 매핑
+3. description : 회원을 설명하는 필드는 길이 제한이 없다. 데이타베이스 VARCHAR 타입 대신에 CLOB 타입으로 저장. 
+   @Lob를 사용하면 CLOB, BLOB 타입을 매핑할 수 있다.
+   
+### 4.4 데이터베이스 스키마 자동 생성
   </div>
 </details>
+
+JPA는 데이터베이스 스키마를 자동으로 생성하는 기능을 지원
+
+```java
+<property name="hibernate.hbm2ddl.auto" value="create" />
+```
+
+어플리케이션 실행 시점에 데이터베이스 테이블을 자동으로 생성한다.
+
+```java
+<property name="hibernate.show_sql" value="true" />
+```
+
+콘솔에 실행되는 DDL을 출력한다.
+
+- 스키마 자동 생성 기능이 만든 DDL은 운영환경에서 사용할 만큼 완벽하지 않음.
+- 개발 환경에서 사용하거나 매핑시 참고하는 용도로 사용.
+
+**하이버네이트 설정 옵션**
+- hibernate.show_sql : 실행한 SQL을 출력.
+- hibernate.format_sql : SQL을 보기 좋게 정렬함.
+- hibernate.use_sql_comments : 쿼리 출력 시 주석도 함께 출력
+- hibernate.id.new_generator_mappings : JPA 표준에 맞는 새로운 키 생성 전략을 사용함.
+
+**하이버네이트 설정**
+- create : Session factory가 실행될 때에 스키마를 지우고 다시 생성. 클래스패스에 import.sql 이 존재하면 찾아서, 해당 SQL도 함께 실행함.
+- create-drop : create와 같지만 session factory가 내려갈 때 스키마 삭제.
+- update : 시작시, 도메인과 스키마 비교하여 필요한 컬럼 추가 등의 작업 실행. 데이터는 삭제하지 않음.
+- validate : Session factory 실행시 스키마가 적합한지 검사함. 문제가 있으면 예외 발생.
+- 개발시에는 create가, 운영시에는 auto 설정을 빼거나 validate 정도로 두는 것이 좋아 보인다.
+  update로 둘 경우에, 개발자들의 스키마가 마구 꼬여서 결국은 drop 해서 새로 만들어야 하는 사태가 발생한다
+  
+**HBM2DDL 주의사항**
+
+운영 서버에서 create, create-drop, update처럼 DLL을 수정하는 옵션은 절대 사용하면 안된다. 오직 개발 서버나 개발 단계에서만 사용
+해야한다. 이 옵션들은 운영 중인 데이터베이스의 테이블이나 컬럼을 삭제할 수 있다.
+
+개발 환경에 따른 추천 전략은 다음과 같다.
+- 개발 초기 단계는 create 또는 update
+- 초기화 상태로 자동화된 테스트를 진행하는 개발자 환경과 CI 서버는 create 또는 create-drop
+- 테스트 서버는 update 또는 validate
+- 스테이징과 운영 서버는 validate 또는 none
+
+**이름 매핑 전략**
+
+테이블 명이나 컬럼 명이 생략되면 자바의 카멜케이스 표기법을 언더스코어 표기법으로 매핑한다
+
+하이버네이트는 `org.hibernate.cfg.ImprovedNamingStrategy 클래스를 제공한다.` 이 클래스는
+테이블 명이나 컬럼 명이 생략되면 자바의 카멜케이스 표기법을 언더스코어 표기법으로 매핑한다.
+```java
+<property name="hibernate.ejb.naming_strategy" value="org.hibernate.cfg.ImprovedNamingStrategy" />
+```
+
+## 4.5 DDL 생성 기능
+
+제약 조건을 추가할 수 있다.
+
+```java
+@Entity
+@Table(name="MEMBER")
+public class Member {
+
+    @Id
+    @Column(name = "ID")
+    private String id;
+
+    @Column(name = "NAME", nullable = false, length = 10) //추가
+    private String username;
+    ...
+}
+```
+
+- nullable = false : not null 제약 조건 추가
+- length = 10 : 크기를 지정
+
+```java
+create table MEMBER (
+    ...
+    NAME varchar(10) not null,
+    ...
+)
+```
+
+단지 DDL을 자동으로 생성할 때만 사용되고, JPA 실행 로직에는 영향을 주지 않는다. 따라서 스키마 자동 생성 기능을 사용하지 않고 직접
+DDL을 만든다면 사용할 이유가 없다. 이 기능을 사용하면 애플리케이션 개발자가 엔티티만 보고도 손쉽게 다양한 제약 조건을 파악할 수 있는 장점이 있다.
+
+### 4.6 기본 키 매핑
+```java
+@Entity
+public class Member {
+
+    @Id
+    @Column(name = "ID")
+    private String id;
+```
+
+**JPA가 제공하는 데이터베이스 기본 키 생성 전략**
+
+데이터베이스 벤더마다 기본 키 생성을 지원하는 방식이 다름
+
+**기본키 생성 전략 방식**
+직접 할당 : 기본 키를 어플리케이션이 직접 할당
+
+자동 생성 : 대리 키 사용 방식
+- INDENTITY : 기본 키 생성을 데이터베이스에 위임.
+- SEQUENCE : 데이터베이스 시퀀스를 사용해서 기본 키를 할당.
+- TABLE : 키 생성 테이블을 사용한다.
+
+**기본키 생성 방법**
+- 기본 키를 직접 할당 : @Id만 사용
+- 자동 생성 전략 사용 : @GeneratedValue 추가 및 키 생성 전략 선택.
+
+**키 생성 전략 사용을 위한 속성 추가**
+```java
+<property name="hibernate.id.new_generator_mappings" value="true" />
+```
+
+### 4.6.1 기본 키 직접 할당 전략
+
+기본 키를 직접 할당하려면 다음 코드와 같이 @Id로 매핑하면 된다.
+```java
+@Id
+@Column(name = "id")
+private String id;
+```
+
+**@Id 적용 가능한 자바 타입**
+- 자바 기본형
+- 자바 래퍼형
+- String
+- java.util.Date
+- java.sql.Date
+- java.math.BigDecimal
+- java.math.BigInteger
+
+**기본 키 할당하는 방법**
+```java
+Board board = new Board();
+board.setId("id1");         //기본 키 직접 할당
+em.persist(board);
+```
+
+
 
 <details>
   <summary>5.연관관계 매핑 기초</summary>
