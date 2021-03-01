@@ -1011,8 +1011,6 @@ public enum RoleType {
    @Lob를 사용하면 CLOB, BLOB 타입을 매핑할 수 있다.
    
 ### 4.4 데이터베이스 스키마 자동 생성
-  </div>
-</details>
 
 JPA는 데이터베이스 스키마를 자동으로 생성하는 기능을 지원
 
@@ -1044,7 +1042,7 @@ JPA는 데이터베이스 스키마를 자동으로 생성하는 기능을 지�
 - validate : Session factory 실행시 스키마가 적합한지 검사함. 문제가 있으면 예외 발생.
 - 개발시에는 create가, 운영시에는 auto 설정을 빼거나 validate 정도로 두는 것이 좋아 보인다.
   update로 둘 경우에, 개발자들의 스키마가 마구 꼬여서 결국은 drop 해서 새로 만들어야 하는 사태가 발생한다
-  
+
 **HBM2DDL 주의사항**
 
 운영 서버에서 create, create-drop, update처럼 DLL을 수정하는 옵션은 절대 사용하면 안된다. 오직 개발 서버나 개발 단계에서만 사용
@@ -1154,6 +1152,362 @@ Board board = new Board();
 board.setId("id1");         //기본 키 직접 할당
 em.persist(board);
 ```
+
+### 4.6.2 IDENTITY 전략
+- IDENTITY는 기본 키 생성을 데이타베이스에 위임하는 전략.
+- 주로 MySQL, PostgreSQL, SQL Server, DB2, H2에서 사용.
+
+**MySQL의 AUTO_INCREMENT 기능**
+```java
+CREATE TABLE BOARD {
+    ID INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    DATA VARCHAR(255)
+};
+
+INSERT INTO BOARD(DATA) VALUES('A');
+INSERT INTO BOARD(DATA) VALUES('B');
+```
+
+Board 테이블 결과
+
+|    ID  | DATA | 
+| ----------| ------------------- |
+|1|A|
+|2|B|
+
+IDENTITY 전략
+- 데이터베이스에 값을 저장하고 나서야 기본 키 값을 구할 수 있을 때 사용.
+- em.persist() 호출시 INSERT SQL을 즉시 데이터베이스에 전달.
+- 식별자를 조회해서 엔티티의 식별자에 할당.
+- 쓰기 지연이 동작하지 않는다.
+
+```java
+@Entity
+public class Professor {
+  @Id 
+  @GeneratedValue(strategy=GenerationType.IDENTITY)
+  private int id;
+  private String name;
+  private long salary;
+  ...
+}
+```
+
+
+### 4.6.3 SEQUENCE 전략
+유일한 값을 순서대로 생성하는 특별한 데이터베이스 오브젝트
+주로 오라클, PostgreSQL, DB2, H2 데이터베이스에서 사용.
+
+**시퀀스 관련 SQL**
+```java
+CREATE TABLE BOARD (
+    ID BIGINT NOT NULL PRIMARY KEY,
+    DATA VARCHAR(255)
+)
+
+//시퀀스 생성
+CREATE SEQUENCE BOARD_SEQ START WITH 1 INCREMENT BY 1;
+```
+
+**시퀀스 매핑 코드**
+```java
+@Entity
+@SequenceGenerator(
+    name = "BOARD_SEQ_GENERATOR",
+    sequenceName = "BOARD_SEQ",
+    initialValue = 1,
+    allocationSize = 1)
+public class Board {
+
+    @Id
+    @GeneraedValue(strategy = GenerationType.SEQUNCE,
+                    generator = "BOARD_SEQ_GENERATOR")
+    private Long id;
+}
+```
+
+**시퀀스 사용 코드**
+```java
+private static void logic(EntityManager em) {
+    Board board = new Board();
+    em.persist(board);
+    System.out.println("board.id = " + board.getId());
+}
+```
+시퀀스 사용 코드는 IDENTITY 전략과 가티만 내부 동작 방식은 다르다.
+
+1. 먼저 데이터베이스 시퀀스를 사용해서 식별자를 조회.
+2. 조회한 식별자를 엔티티에 할당.
+3. 엔티티를 영속성 컨텍스트에 저장.
+4. 트랜잭션 커밋.
+5. 플러시 - 데이터베이스에 저장.
+
+**주의**
+- equenceGenerator.allocationSize 기본값이 50.
+- 반드시 1로 설정.
+
+**@SepuenceGenerator**
+
+|    속성  | 기능 | 기본값 |
+|----------| ------------------- | ------------------- |
+|name|식별자 생성기 이름|필수|
+|sequenceName|데이터베이스에 등록되어 있는 시퀀스 이름|hibernate_sequence|
+|initialValue|DDL 생성 시에만 사용됨. 시퀀스 DDL을 생성할 때 처음 시작 하는수를 지정한다.|1|
+|allocationSize|시퀀스 한 번 호출에 증가하는 수(성능 최척화에 사용됨)|50|
+|catalog.schema|데이터베이스 catalog, schema 이름|
+
+매핑할 DDL은 다음과 같다.
+```sql
+create sequence [sequenceName] 
+start with [initialValue] increment by allocationSize
+```
+
+jpa 표준 명세서에는 SEQUENCEnAME의 기본 값을 jpa 구현체가 정의하도록 헀다. 
+위에서 설명한 기본값은 하이버네이트 기준이다.
+
+### 4.6.4 TABLE 전략
+- 키 생성 전용 테이블을 하나 만들고 여기에 이름과 값을 사용할 컬럼을 만들어 데이터베이스 시퀀스를 흉내내는 전략.
+- 테이블을 사용하므로 모든 데이터베이스에 적용 할 수 있다.
+
+**TABLE 전략 키 생성 테이블**
+
+```sql
+create table MY_SEQUENCES (
+    sequence_name varchar(255) not null,
+    next_val bigint,
+    primary key (sequence_name)
+)
+```
+
+SEQUENCE_NAME 컬럼을 시퀀스 이름으로 사용하고 NEXT_VAL 컬럼을 시퀀스 값으로 사용한다. 참고로
+컬럼의 이름은 변경할 수 있는데 여기서 사용한 것이 기본 값이다.
+
+**TABLE 전략 매핑 코드**
+```sql
+@Entity
+@TableGenerator(
+    name = "BOARD_SEQ_GENERATOR",
+    table = "MY_SEQUENCES",
+    pkColumnValue = "BOARD_SEQ", allocationSize = 1)
+public class Board {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.TABLE,
+                generator = "BOARD_SEQ_GENERATOR")
+    private Long id;
+}
+```
+1. @TableGenerator을 사용해서 테이블 키 생성기를 등록 (BOARE_SEQ_GENERATOR라는 이름의 테이블 키 생성기를 등록하고 방금 생성한
+   My_SEQUENCES 테이블을 키 생성용 테이블로 매핑함)
+2. TABLE 전략을 사용하기 위해 GenerationType.TABLE을 선택했다.
+3. @GeneratedBalue.generator에 방금 만든 테이블 키 생성기를 지정.
+4. 이제부터 id 식별자 값은 BOARD_SEQ_GENERATOR 테이블 키 생성기가 할당.
+
+**TABLE 전략 매핑 사용 코드**
+```sql
+private static void logic(EntityManger em) {
+    Board board = new Board();
+    em.persist(board);
+    System.out.println("board.id = " + board.getId());
+}
+// 출력 : board.id = 1
+```
+
+- MY_SEQUENCES 테이블에 값이 없으면 JPA가 값을 INSERT
+- 미리 넣어둘 필요가 없다.
+
+시퀀스 대신에 테이블을 사용한다는 것만 제외하면 SEQUENCE 전략과 동일
+
+**@TableGenerator**
+
+`@TableGenerator` 속성 정리
+
+|    속성  | 기능 | 기본값 |
+|----------| ------------------- | ------------------- |
+|name|식별자 생성기 이름|필수|
+|table|키생성 테이블명|hibernate_sequences|
+|table|키생성 테이블명|hibernate_sequences|
+|pkCoumnName|시퀀스 컬럼명|sequence_name|
+|valueColumnName|시퀀스 값 컬럼명|next_val|
+|pkColumnValue|키로 사용할 값 이름|엔티티이름|
+|initialValue|초기 값, 마지막으로 생성된 값이 기준이다.|0|
+|allocationSize|시퀀스 한 번 호출에 증가하는 수(성능 최적회에 사용됨)|50|
+|catalog, schema|데이터베이스 catalog, schema 이름||
+|uniqueConstraints(DDL)|유니크 제약 조건을 지정할 수 있다.||
+
+JPA 표준 명세서에는 table, pkColumnName, valueColumnName의 기본값을 JPA 구현체가 정의하도록 했다. 위에서 설명한
+기본값은 하이버네이트 기준이다.
+
+`표 4.8 매핑할 DDL,테이블명{table}`
+|    {pkColumnName}  | {valueColumnName} |
+|----------| ------------------- |
+|{pkColumnName}|{initialValue}|
+
+TABLE 전략과 최적화
+
+TABLE 전략은 값을 조회하면서 SELECT 쿼리를 사용하고 다음 값으로 증가시키기 위해 UPDATE 쿼리를 사용한다.
+이 전략은 SEQUENCE 전략과 비교해서 데이터베이스와 한 번 더 통신하는 단점이 있다. TABLE 전략을 최적화하려면 @TableGenerator.allocationSize
+를 사용하면 된다. 이 값을 사용해서 최적화하는 방법은 SEQUENCE 전략고 같다.
+
+### 4.6.5 AUTO 전략
+
+GenerationType.AUTO는 선택한 데이터베이스 방언에 따라 INDENTITY, SEQUENCE, TABLE 전략 중 하나를 자동으로 선택.
+
+**AUTO 전략 매핑 코드**
+```java
+@Entity
+public class Board {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.AUTO)
+    private Long id;
+    ...
+}
+```
+@GeneratedValue.strategy의 기본값은 AUTO.
+
+다음과 같이 사용해도 결과는 같다.
+
+```java
+import javax.persistence.GeneratedValue;
+
+@Id @GeneratedValue
+private Long id;
+```
+**장점**
+- 데이터베이스를 변경해도 코드를 수정할 필요가 없다.
+- 키 생성 전략이 확정되지 않은 개발 초기 단계, 프로토타입 개발시 편리.
+  
+### 4.6.6 기본 키 매핑 정리
+영속성 컨텍스트는 엔티티를 식별자 값으로 구분하므로 엔티티를 영속 상태로 만들려면 식별자 값이
+반드시 있어야 한다. em.persist()를 호출한 직후에 발생하는 일을 식별자 할당 전략별로 정리하면 다음과 같다.
+
+- 직접 할당 : em.persist()를 호출하기 전에 애플리케이션에서 직접 식별자 값을 할당해야 한다. 만약 식별자 값이 없으면
+  예외가 발생한다.
+- SEQUENCE : 데이터베이스 시퀀스에서 식별자 값을 획득한 후 영속성 컨텍스트에 저장한다.
+- TABLE : 데이터베이스 시퀀스 생성용 테이블에서 식별자 값을 획득한 후 영속성 컨텍스트에 저장한다.
+- IDENTITY : 데이터베이스에 엔티티를 저장해서 식별자 값을 획득한 후 영속성 컨텓스트에 저장한다(IDENTITY 전략은 테이블에
+  데이터를 저장해야 식별자 값을 획득할 수 있다.)
+  
+**권장하는 식별자 선택 전략**
+데이터베이스 기본 키는 다음 3가지 조건을 모두 만족해야 한다.
+1. null값을 허용하지 않는다.
+2. 유일해야 한다.
+3. 변해선 안 된다.
+
+테이블의 기본 키를 선택하는 전략은 크게 2가지가 있다.
+- 자연 키
+  - 비지니스에 의미가 있는 키
+  - 주민등록번호, 이메일, 전화번호
+- 대리 키
+  - 비지니스와 관련 없는 임의로 만들어진 키, 대체 키.
+  - 오라클 시퀀스, auto_increment, 키생성 테이블
+
+
+기본 키의 조건을 현재는 물론이고 미래까지 충족하는 자연 키를 찾기는 쉽지 않다.
+대리 키는 비즈니스와 무관한 임의의 값이므로 요구사항이 변경되어도 기본 키가 변경되는 일은 드물다. 
+대리 키를 기본키로 사용하되 주민등록번호나 이메일처럼 자연 키의 후보가 되는 컬럼들은 필요에 따라 유니크 인덱스를 설정해서
+사용하는 것을 권장한다. `그래서 JPA는 모든 엔티티에 일관된 방시으로 대리 키 사용을 권장한다.`
+
+`주의`
+기본 키는 변하면 안된다는 기본 원칙으로 인해, 저장된 엔티티의 기본 키 값은 절대 변경하면 안 된다. 이 경우 JPA는 예외를 발생
+시키거나 정상 동작하징 ㅏㄶ는다. setId() 같이 식별자를 수정하는 메소드를 외부에 공개하지 않는 것도 문제를 예방하는 
+방법이 될 수 있다.
+
+## 4.7 필드와 컬럼 매핑 : 레퍼런스
+필드와 컬럼 매핑 
+
+@Column : 컬럼을 매핑한다
+
+@Enumerated : 자바의 enum 타입을 매핑한다.
+
+@Temporal : 날짜 타입을 매핑한다.
+
+@Lob : BLOB, CLOB 타입을 매핑한다.
+
+@Transient : 특정 필드를 데이터베이스에 매핑하지 않는다.
+
+기타
+
+@Access : JPA가 엔티티에 접근하는 방식을 지정한다.
+
+**@Column**
+
+@Column의 속성
+
+- name : 맵핑할 테이블의 컬럼 이름을 지정합니다;
+- insertable : 엔티티 저장시 선언된 필드도 같이 저장합니다.
+- updateable : 엔티티 수정시 이 필드를 함께 수정합니다.
+- table : 지정한 필드를 다른 테이블에 맵핑할 수 있도록 합니다.
+- nullable : NULL을 허용할지, 허용하지 않을지 결정합니다.
+- unique : 제약조건을 걸 때 사용합니다.
+- columnDefinition : DB 컬럼 정보를 직접적으로 지정할 때 사용합니다.
+- length : varchar의 길이를 조정합니다. 기본값으로 255가 입력됩니다.
+- precsion, scale : BigInteger, BigDecimal 타입에서 사용합니다.  각각 소수점 포함 자리수, 소수의 자리수를 의미합니다.
+
+**@Enumerated**
+- value(속성)
+  - EnumType.ORDINAL : enum 순서를 데이터베이스에 저장 (기본 값)
+  - EnumType : enum 이름을 데이터베이스에 저장
+
+EnumType.ORDINAL은 enum에 정의된 순서대로 ADMIN은 0, USER는 1 값이 데이터베이스에 저장된다.
+- 장점 : 데이터베이스에 저장되는 데이터 크기가 작다.
+- 단점 : 이미 저장된 enum의 순서를 변경할 수 없다.
+
+EnumType.STRING은 enum 이름 그대로 ADMIN은 'ADMIN', USER는 'USER'라는 문자로 데이터베이스에 저장된ㄷ.
+- 장점 : 저장된 enum의 순서가 바뀌거나 enum이 추가되어도 안전하다.
+- 단점 : 데이터베이스에 저장되는 데이터 크기가 ORDINAL에 비해서 크다.
+
+`주의`
+기본값인 ORDINAL은 주의해서 사용해야 된다.
+
+ADMIN(0번), USER(1번) 사이에 enum이 하나 추가되서 ADMIN(0번). NEW(1번), USER(2번)로 설정되면서 이제부터 USER는 2로
+저장되지만 기존에 데이터베이스에 저장된 값은 여전히 1로 남아 있다. 따라서 이런 문제가 발생하지 않는 EnumType.STRING을 권장한다.
+
+**@Temporal**
+
+- 속성
+  - TemporalType.DATE : 날짜, 데이터베이스, date 타입과 매핑(예 : 2013-10-11)
+  - TemporalType.TIME : 시간, 데이터베이스 time 타입과 매핑(예 : 11:11:11)
+  - TemporalType.TIMESTAMP : 날짜와 시간, 뎅터베이스 timestamp 타입과 매핑(예 : 2013-10-11 11:11:11)
+  - TemporalType은 필수로 지정해야 한다.
+  
+ex)
+```java
+@Temporal(Temporal.TIMESTAMP) // TIMESTAMP 대신에 DATE or TIME가 들어가 수 있다.
+private Date timetamp;
+```
+
+생성된 DDL
+
+timestamp timestamp;
+
+**@Lob**
+
+속성 정리
+
+@Lob에는  지정할 수 있는 속성이 없다. 대신에 매핑하는 필드 타입이 문자면 CLOB으로 매핑하고 나머지는 BLOG로 매핑한다
+- CLOB : String, char[], java.sql.CLOB
+- BLOB : byte[], java.sql.BLOB
+  
+**Transient**
+이 필드는 매핑하지 않는다. 따라서 데이터베이스에 저장하지도 않고 조회하지도 않는다. 객체에 임시로 어떤 값을 보관하고 싶을 때
+사용한다.
+
+**Access**
+JPA가 엔티티 데이터에 접근하는 방식을 지정
+
+- 필드 접근
+  -AccessType.FIELD로 지정
+  - 필드에 직접 접근
+  - private이어도 접근
+- 프로퍼티 접근
+  - AccessType.PROPERTY로 접근
+  - 접근자(Getter)를 사용
+
+  </div>
+</details>
+
 
 
 
