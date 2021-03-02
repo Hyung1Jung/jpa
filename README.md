@@ -1948,6 +1948,20 @@ TIAM_ID 외래 키에 팀의 기본 값이 저장되어 있다.
   </div>
 </details>
 
+<details>
+  <summary>6.다양한 연관관계 매핑</summary>
+  <div markdown="1">
+
+  </div>
+</details>
+
+<details>
+  <summary>7.고급 매핑</summary>
+  <div markdown="1">
+
+  </div>
+</details>
+
 참고 문헌 :
 
 - [자바 ORM 표준 JPA 프로그래밍 / 김영한](https://www.aladin.co.kr/shop/wproduct.aspx?ItemId=62681446)
