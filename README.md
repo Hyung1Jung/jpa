@@ -1,4 +1,4 @@
-a# JPA STUDY
+# JPA STUDY
 
 ## 자바 ORM 표준 JPA 프로그래밍
 
@@ -1511,11 +1511,439 @@ JPA가 엔티티 데이터에 접근하는 방식을 지정
 </details>
 
 
-
-
 <details>
   <summary>5.연관관계 매핑 기초</summary>
   <div markdown="1">
+
+## 5. 연관관계 매핑 기초
+객체의 참조와 테이블의 외래 키를 매핑할 수 있다.
+
+**방향 : 단방향, 양방향**
+
+- 회원 -> 팀
+- 팀 -> 회원
+- 회원 -> 팀, 팀 -> 회원
+
+**다중성**
+
+- 다대일, 일대다, 일대일, 다대다
+- N:1, 1:N, 1:1, N:N
+
+**연관관계의 주인**
+
+- 객체를 양방향 연관관계로 만들면 연관관계의 주인을 정해야 한다.
+
+### 단방향 연관 관계
+
+**객체 연관관계**
+
+- 객체는 단방향 관계다. 
+- 객체의 필드(멤버 변수)로 다른 객체와 연관관계를 맺는다.
+
+**테이블 연관관계**
+
+- 양방향 관계다.
+- 테이블은 외래키로 다른 테이블과 연관관계를 맺는다.
+- 두 테이블의 외래키를 통해서 서로 조인 할 수가 있다.
+
+**객체 연관관계와 테이블 연관관게의 가장 큰 차이**
+
+참조를 통한 연관관계는 언제나 단방향이다. 객체간에 연관관계를 양방향으로 만들고 싶으면 반대쪽에도 필드를 추가해서 참조를 보관
+해야한다. 결국 연관관계를 하나 더 만들어야 한다. 이렇게 양쪽에서 서로 참조하는 것을 양방향 연관관계라 한다. 하지만 정확히
+이야기하면 이것은 `양방향 관계가 아니라 서로 다른 단방향 관계 2개다.` 반면에 테이블은 외래 키 하나로 양방향으로 조인할 수 있다.
+
+**객체 연관관계 vs 테이블 연관관계 정리**
+
+- 객체는 참조(주소)로 연관관계를 맺는다.
+  - 객체는 참조를 사용해서 연관관계를 탐색할 수 있는데 이것을 `객체 그래프 탐색`이라고 한다.
+- 테이블은 외래 키로 연관관계를 맺는다.
+
+### 5.1.3 객체 관계 매핑
+
+**객체 관계 매핑**
+
+```java
+@Entity
+public class Member {
+
+    @Id
+    @Column(name = "MEMBER_ID")
+    private Long id;
+
+    private String username;
+
+    //연관 관계 매핑
+    @ManyToOne
+    @JoinColumn(name="TEAM_ID")
+    private Team team;
+
+    //연관관계 설정
+    public void setTeam(Team team) {
+        this.team = team;
+    }
+
+    //Getter Setter
+}
+```
+- @ManyToOne
+  - 다대일(N:1) 관계라는 매핑 정보
+  - 어노테이션 필수
+- @JoinColumn(name="TEAM_ID")
+  - 조인컬럼은 외래 키를 매핑할 때 사용
+  - name 속성에 매핑할 외래 키 이름을 지정
+  - 생략 가능하다.
+  
+**@JoinColumn 생략**
+
+- 기본 전략 : 필드명 + _ + 참조하는 테이블의 컬러명
+- 외래키 = team_TEAM_ID
+
+**@ManyToOne**
+
+다대일 관계에 사용
+```java
+@OneToMany
+private List<Member> members;           // 제네릭 사용
+
+@OneToMany(targetEntity=Member.class)   // 거의 사용 안함
+private List members;                   // 타입 알 수 없음
+```
+
+### 5.1.4 @JoinColumn
+
+@JounColumn은 외래 키를 매핑할 때 사용한다.
+
+**@JoinColumn 주요 속성**
+
+name
+- 매핑할 외래 키 이름
+- 필드명 + _ + 참조하는 테이블의 기본 키 컬럼명
+
+referencedColumnName 
+- 외래 키가 참조하는 대상 테이블의 컬럼명
+- 참조하는 테이블의 기본 키 컬럼명
+
+foreignKey(DDL)
+- 외래 키 제약조건을 직접 지정할 수 있다.
+- 이 속성은 테이블을 생성할 때만 사용한다.
+
+unique, nullable, insertable, updatable, columnDefinition, table
+- @Column의 속성과 같다.
+
+### 5.1.5 @ManyToOne
+@ManyToOne 어노테이션은 다대일 관계에서 사용한다.
+
+**@ManyToOne 속성**
+
+optional
+- false로 설정하면 연관된 엔티티가 항상 있어야 한다.
+- 기본값은 true
+
+fetch 
+- 글로벌 패치 전략을 설정한다.
+- @ManyToOne - FetchType.EAGER
+- @OneToMany = FetchType.LAZY
+
+cascade
+- 영속성 전이 기능을 사용한다.
+
+targetEntity 
+- 연관된 엔티티의 타입 정보를 설정한다. 이 기능은 거의 사용하지 않는다. 컬렉션을 사용해도 제네릭으로 타입 정보를 알 수 있다.
+
+## 5.2 연관관계 사용
+
+### 5.2.1 저장
+
+```java
+public void testSave() {
+
+    //팀1 저장
+    Team team1 = new Team("team1", "팀1");
+    em.persist(team1);
+
+    //회원1 저장
+    Member member1 = new Member(100L, "회원1");
+    member1.setTeam(team1);     //연관관계 설정 member1 -> team1
+    em.persist(member1);
+
+    //회원2 저장
+    Member member2 = new Member(101L, "회원2");
+    member2.setTeam(team1);     //연관관계 설정 member2 -> team1
+    em.persist(member2);
+}
+```
+JPA에서 엔티티를 저장할때 연관된 모든 엔티티는 `영속 상태`여야 한다.
+
+|MEMBER_ID|	NAME|	TEAM_ID|	TEAM_NAME|
+|---------|----|--------------------|----|
+|100|	회원1|	team1	|팀1|
+|101	|회원2	|team2	|팀1|
+
+### 5.2.2 조회
+
+연관관계가 있는 엔티티를 조회하는 방법은 크게 2가지다.
+- 객체 그래프 탐색(객체 연관관계를 사용한 조회)
+- 객체지향 쿼리 사용(JPQL)
+
+**객체 그래프 탐색**
+
+```java
+Member member = em.find(Member.class, 100L);
+Team team = member.getTeam();   //객체 그래프 탐색
+System.out.println("팀 이름 = " + team.getName());
+```
+
+**객체 지향 쿼리 사용**
+
+객체 지향 쿼리인 JPQL에서 연관관계를 어떻게 사용하는지 알아보자. SQL은 연관된 테이블을 조인해서 검색조건을 사용하면 된다.
+JPQL도 조인을 지원한다.
+
+```java
+public static void testJPQL(EntityManager em) {
+    String jpql1 = "select m from Member m join m.team t where " +
+            "t.name = :teamName";
+
+    List<Member> resultList = em.createQuery(jpql1, Member.class)
+            .setParameter("teamName", "팀1")
+            .getResultList();
+
+    for (Member member : resultList) {
+        System.out.println("[query] member.username = " +
+                member.getUsername());
+    }
+}
+// 결과: [query] member.username=회원1
+// 결과: [query] member.username=회원2
+```
+
+`from Member m join m.team t` 부분을 보면 회원이 팀과 관계를 가지고 있는 필드(m.team)을 통해서 Member와 Team을 
+조인했다. 그리고 where 절을 보면 조인한 t.name을 검색조건으로 사용해서 팀1에 속한 회원만 검색했다.
+다음 실행한 JPQL을 보자. 참고로 :teamName과 같이 :로 시작하는 것은 파라미터를 바인딩 받는 문법이다.
+
+이때 실행되는 SQL은 다음과 같다.
+
+```sql
+SELECT M.* FROM MEMBER MEMBER 
+INNER JOIN 
+    TEAM TEAM ON MEMBER.TEAM_ID = TEAM1_.ID 
+WHERE
+    TEAM1_.NAME='팀1'
+```
+실행된 SQL과 JPQL을 비교하면 JPQL은 객체(엔티티)를 대상으로 하고 SQL보다 간결하다.
+
+### 5.2.3 수정
+
+```java
+private static void updateRelation(EntityManager em) {
+
+    // 새로운 팀2
+    Team team2 = new Team("team2", "팀2");
+    em.persist(team2);
+
+    //회원1에 새로운 팀2 설정
+    Member member = em.find(Member.class, 100L);
+    member.setTeam(team2);
+}
+```
+
+실행되는 수정 SQL은 다음과 같다.
+
+```sql
+UPDATE MEMBER SET TEAM_ID='team2', ... WHERE ID = 'member1' 
+```
+수정은 em.update() 같은 메소드가 없다. 단순히 불러온 엔티티의 값만 변경해두면 트랜잭션을 커밋할 때 플러시가 일어나면서
+변경 감지 기능이 작동한다. 그리고 변경사항을 데이터베이스에 자동으로 반영한다. 이것은 연관관계를 수정할 때도 같은데, 참조하는
+대상만 변경하며 나머지는 JPA가 자동으로 처리한다.
+
+### 5.2.4 연관관계 제거
+
+```java
+private static void deleteRelation(EntityManager em) {
+
+    Member member1 = em.find(Member.class, "member1");
+    member1.setTeam(null);      //연관관계 제거
+}
+```
+
+### 5.2.5 연관된 엔티티 삭제
+
+연관된 엔티티를 삭제하려면 기존에 있던 연관관계를 먼저 제거하고 삭제해야 한다. 그렇지 않으면 외래 키 제약조건으로 인해,
+데이터베이스에서 오류가 발생한다. 팀1에 회원 1,2가 소속되어 있을 시, 팀1을 삭제하려면 연관관계를 먼저 끊는다.
+
+```java
+member1.setTeam(null);  // 회원1 연관관계 제거
+member2.setTeam(null);  // 회원2 연관관계 제거
+em.remove(team);        // 팀 삭제
+```
+
+## 5.3 양뱡향 연관관계
+
+![1](https://user-images.githubusercontent.com/43127088/109632843-d0941100-7b8a-11eb-9630-0d5b4de201a5.PNG)
+
+**양방향 객체 연관관계**
+
+회원과 팀이 있을때, 회원과 팀은 다대일 관계라고 하자. 그럼 반대로 팀에서 회원은 일대다 관계다.
+일대다 관계는 여러 건과 연관관계를 맺을 수 있으므로 컬렉션을 사용해야 한다. 팀은 `Team.members`를 List 컬렉션으로 추가했다.
+
+- 회원 -> 팀(Member.team)
+- 팀 -> 회원(Team.members)
+
+`참고`
+JPA는 LIST를 포함해서 Collection, Set, Map 같은 다양한 컬렉션을 지원한다.
+
+
+**테이블 관계는 어떻게 될까?**
+
+데이터이스 테이블은 외래 키 하나로 양방향으로 조회할 수 있다. 두 테이블의 연관관계는 외래 키 하나만으로 양방향 조회가 가능하므로
+처음부터 양방향 관계다. 따라서 데이터베이스에 추가 할 내용이 전혀 없다.
+
+### 5.3.1 양방향 연관관계 매핑
+
+```java
+@Entity
+public class Team {
+    ...
+  // 필드 생략
+
+  @OneToMany(mappedBy = "team")
+  private List<Member> members = new ArrayList<Member>();
+    
+  //Getter, Setter ..  
+}
+```
+
+팀과 회원은 일대다 관계다. 따라서 팀 엔티티에 컬렉션인 `List<Member> members`를 추가했다. 그리고 일대다 관계를 매핑하기
+위해 @OneToMany 매핑 정보를 사용했다. mappedBy 속성은 양방향 매핑일 때 사용하는데 반대쪽 매핑의 필드 이름을 값으로 주면 된다.
+
+## 5.4 연관관계 주인
+테이블은 왜래 키 하나로 두 테이블의 연관관계를 관리한다. 엔티티를 단반향으로 매핑하면 참조를 하나만 사용하므로
+이 참조로 외래 키를 관리하면 된다. 그런데 엔티티를 양방향으로 매핑하면 두 곳에서 서로를 참조한다.
+따라서 객체의 연관관계를 관리하는 포인트는 2곳으로 늘어난다.
+
+엔티티를 양방향 연관관계로 설정하면 객체의 참조는 둘인데 외래 키는 하나다. 따라서 둘 사이에 차이가 발생한다. 그럼
+둘 중 어떤 관계를 사용해서 외래 키를 관리해야 할까?
+
+이런 차이로 인해 JPA에서는 **두 객체 연관관계 중 하나를 정해서 테이블의 외래키를 관리해야 하는데 이것을 연관관계의 주인이라 한다.**
+
+### 5.4.1 양방향 매핑 규칙 : 연관관계의 주인
+- 연관관계의 주인만이 데이타베이스 연관관계와 매핑된다.
+- 연관관계의 주인만이 외래키를 관리(등록, 수정, 삭제)할 수 있다.
+- 주인이 아닌 쪽은 읽기만 할 수 있다.
+
+연관관계의 주인을 정한다는 것 = 외래 키 관리자를 선택하는 것.
+
+**mappedBy 속성**
+
+- 주인이 아니면 mappedBy 속성을 사용해서 속성의 값으로 연관관계의 주인을 지정
+- 주인은 mappedBy 속성을 사용하지 않는다.
+
+그렇다면 `Member.team, Team.members` 둘 중 어떤 것을 연관관계의 주인으로 정해야할까?
+
+**회원 -> 팀(Member.team) 방향**
+```java
+Class Member {
+    @ManyToOne
+    @JoinColumn(name="TEAM_ID")
+    private Team team;
+    ...
+        }
+```
+
+**팀 -> 회원(Team.members) 방향**
+```java
+class Team{
+    @OneToMany
+    private List<Member> members = new ArrayList<Member>();
+    ...
+```
+
+연관관계의 주인을 정한다는 것은 사실 외래 키 관리자를 선택하는 것이다. 회원 테이블에 있는 TEAM_ID 외래 키를 관리할 관리자를 선택해야 한다.
+만약 회원 엔티티에있는 Member.team을 주인으로 선택하면 자기 테이블에 있는 외래 키를 관리하면 된다. 하지만 팀 엔티티에 있는
+Team.members를 주인으로 선택하면 물리적으로 전혀 다른 테이블의 외래 키를 관리해야 한다. 왜냐하면 이 경우 Team.members가 있는
+Team 엔티티는 TEAM 테이블에 매핑되어 있는데 관리해야할 외래 키는 MEMBER 테이블에 있기 때문이다.
+
+### 5.4.2 연관관계의 주인은 외래 키가 있는 곳
+- 연관관계의 주인은 테이블에 외래 키가 있는 곳으로 정해야 한다.
+- Team 엔티티는 mappedBy를 통해 주인이 아님을 설정.
+
+```java
+class Team {    
+    @OneToMany(mappedBy = "team")  // 연관관계 주인인 Member.team
+    private List<Member> members = new ArrayList<Member>();
+}
+```
+- 연관관계의 주인만 데이터베이스 연관관계와 매핑, 외래 키를 관리.
+- 주인이 아닌 반대편은 읽기만 가능, 외래 키를 변경하지 못한다.
+- 항상 '다(N)'쪽이 외래 키를 가진다.
+- @ManyToOne은 항상 연관관계의 주인이 되므로 mappedBy를 설정할 수 없다. 따라서 @ManyToOne에는 mappedBy 속성이 없다.
+
+### 양방향 연관관계 저장
+```java
+public void testSave() {
+
+    //팀1 저장
+    Team team1 = new Team("team1", "팀1");
+    em.persist(team1);
+
+    //회원1 저장
+    Member member1 = new Member("member1", "회원1");
+    member1.setTeam(team1);     //연관관계 설정 member1 -> team1
+    em.persist(member1);
+
+    //회원2 저장
+    Member member2 = new Member("member2", "회원2");
+    member2.setTeam(team1);     //연관관계 설정 member2 -> team1
+    em.persist(member2);
+}
+```
+
+**주인이 아닌 곳에 입력된 값은 외래 키에 영향을 주지 않는다. 따라서 이전 코드는 데이터베이스에 저장할 때 무시된다.**
+```java
+team1.getMembers().add(member1);        //무시(연관관계의 주인이 아님)
+team1.getMembers().add(member2);        //무시(연관관계의 주인이 아님)
+
+member1.setTeam(team1);                 //연관관계 설정(연관관계의 주인)
+member2.setTeam(team1);                 //연관관계 설정(연관관계의 주인)
+```
+
+Member.team은 연관관계의 주인, 엔티티 매니저는 이곳에 입력된 값으로 외래 키 관리
+
+## 5.6 양방향 연관관계 주의점
+양방향 연관관계를 설정하고 가장 흔히 하는 실수는 연관관계의 주인에는 값을 입력하지 않고, 주인이 아닌 곳에만 값을 입력하는 것이다.
+데이터베이스에 외래 키 값이 정상적으로 저장되지 않으면 이것부터 의심해보자.
+
+```java
+public void testSaveNonOwner() {
+
+        //회원1 저장
+        Member member1 = new Member("member1", "회원1");
+        em.persist(member1);
+
+        //회원2 저장
+        Member member2 = new Member("member2", "회원2");
+        em.persist(member2);
+
+        Team team1 = new Team("team1", "팀1");
+
+        //주인이 아닌 곳에 연관관계 설정
+        team1.getMembers().add(member1);
+        team2.getMembers().add(member2);
+
+        em.persist(team1);
+}
+```
+
+조회한 결과는 다음과 같다,
+
+|    MEMBER_ID  | USERNAME | TEAM_ID| 
+| ----------| ------------------- |---|
+|member1|회원1|null|
+|member2|회원2|null
+
+TIAM_ID 외래 키에 팀의 기본 값이 저장되어 있다.
+양방향 연관관계는 연관관계의 주인이 외래 키를 관리한다. 따라서 주인이 아닌 방향은 값을 설정하지 않아도 데이터베이스에 외래 키
+값이 정상 입력된다.
+
 
   </div>
 </details>
