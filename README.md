@@ -1988,8 +1988,7 @@ public class Member {
 ```
 setTeam() 메소드 하나로 양방향 관계를 모두 설정하도록 변경했다.
 
-### 5.6.3
-연관관계 편의 메소드 작성 시 주의사항
+### 5.6.3 연관관계 편의 메소드 작성 시 주의사항
 ```java
 member1.setTeam(teamA); // 1
 member1.setTeam(teamB); // 2
