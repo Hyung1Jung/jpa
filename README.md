@@ -1940,10 +1940,93 @@ public void testSaveNonOwner() {
 |member1|회원1|null|
 |member2|회원2|null
 
-TIAM_ID 외래 키에 팀의 기본 값이 저장되어 있다.
+TEAM_ID 외래 키에 팀의 기본 값이 저장되어 있다.
 양방향 연관관계는 연관관계의 주인이 외래 키를 관리한다. 따라서 주인이 아닌 방향은 값을 설정하지 않아도 데이터베이스에 외래 키
 값이 정상 입력된다.
 
+### 5.6.1 순수한 객체가지 고려한 양방향 연관관계
+그렇다면 정말 연관관계의 주인에만 값을 저장하고 주인이 아닌 곳에는 값을 저장하지 않아도 될까?
+
+사실은 **객체 관점에서 양쪽 방향에 모두 값을 입력해주는 것이 가장 안전하다** 양쪽 방향 모두 값을 입력하지 않으면
+JPA를 사용하지 않는 순수한 객체 상태에서 심각한 문제가 발생할 수 있다.
+
+```java
+member1.setTime(team1); 회원 -> 팀
+```
+Member.team에만 연관관게를 설정하고 반대 방향은 연관관계를 설정하지 않는다면 기대했던 결과 값이 나오지 않는다.
+
+양방향은 양쪽다 관계를 설정해야 한다. `회원 -> 팀`을 설정하면 다음 `팀 -> 회원'도 설정해야 한다.
+
+```java
+member1.setTeam(team1); // 회원 -> 팀
+team1.getMembers().add(member1); // 팀 -> 회원
+```
+객체까지 고려하면 이렇게 양쪽 다 관계를 맺어야 한다. 이렇게 양쪽에 연관관계를 설정하면 순수한 객체 상태에서도
+동작하며, 테이블의 외래 키도 정상 입력된다. 물론 외래 키의 값은 연관관계의 주인인 Member.team 값을 사용한다.
+
+정리하자면, 앞서 이야기한 것처럼 객체까지 고려해서 주인이 아닌 곳에도 값을 입력하자. 
+즉, 객체의 양방향 연관관계는 양쪽 모두 관계를 맺어주자.
+
+### 5.6.2 연관관계 편의 메소드
+```java
+member1.setTeam(team1); // 회원 -> 팀
+team1.getMembers().add(member1); // 팀 -> 회원
+```
+양방향 관계에서 두 코드는 하나인 것처럼 사용하는 것이 안전하다.
+
+Member 클래스의 setTeam() 매소드를 수정해서 코드를 리팩토링해보자.
+
+```java
+public class Member {
+    private Team team;
+    
+    public void setTeam(Team team) {
+        this.team = team;
+        team.getMembers().add(this);
+    }
+}
+```
+setTeam() 메소드 하나로 양방향 관계를 모두 설정하도록 변경했다.
+
+### 5.6.3
+연관관계 편의 메소드 작성 시 주의사항
+```java
+member1.setTeam(teamA); // 1
+member1.setTeam(teamB); // 2
+Member findMember = teamA.getMember(); // member1이 여전히 조회된다.
+```
+
+teamB로 변경할 때 tamA -> member1 관계를 제거하지 않는다. 그래서 연관관계를 변경할 때는 기존 팀이 있으면 기존 팀과 회원의 연관관계를
+삭제하는 코드를 추가해야 한다. 따라서 기존 관계를 제거하도록 코드를 수정해야 한다.
+
+```java
+public void setTeam(Team team) {
+    // 기존 팀과 관계를 제거
+    if (this.team != null) {
+        this.team.getMembers().remove(this);
+        }    
+    this.team = team;
+    team.getMembers().add(this);
+}
+```
+
+삭제되지 않은 관계2에서 teamA -> member1 관계가 제거되지 않아도 데이터베이스 외래 키를 변경하는 데는문제가 없다. 왜냐하면 teamA -> member1 관계를
+설정한 Team.members는 연관관계의 주인이 아니기 떄문이다. 연관관계의 주인인 Member.team의 참조를 member1 -> teamB로
+변견했으므로 데이터베이스에 외래 키는 teamB를 참조하도록 정상 반영 된다.
+
+그리고 이후에 새로운 영속성 컨텍스트에서 teamA를 조회해서 teamA.getMembers()를 호출하면 데이터베이스 외래 키에는 관계가
+끊어져 있으므로 아무것도 조회되지 않는다. 여기까지만 보면 특별한 문제가 ㅇ벗는 것 같다.
+
+문제는 관계를 변경하고 영속성 컨텍스트가 아직 살아있는 상태에서 teamA의 getMembers()를 호출하면 member1이 반환된다는 점이다. 따라서 변경된 연관관계는
+앞서 설명한 것처럼 관계를 제거하는 것이 안전하다.
+
+양방향 매핑은 복잡하다. 비즈니스 로직의 필여에 따라 다르곘지만 우선 단방향 매핑을 사용하고 반대 방향으로 객체 그래프 탐색 기능(JPQL 쿼리
+탐색 포함)이 필요할 때 양방향을 사용하도록 코드를 추가해도 된다.
+
+`주의`
+양뱡행 매핑 시에는 무한 루프에 빠지지 않게 조심해야 한다. 예를 들어 Member.toString()에서 getTeam()을 호출하고 Team.toString()에서
+getMember()를 호출하면 무한 루프에 빠질 수 있다. 이런 문제는 엔티티를 JSON으로 변환할 때 자주 발생하는데 JSON 라이브러리들은 보통
+무한루프에 빠지지 않도록 하는 어노테이션이나 기능을 제공한다. 그리고 Lombok을 사용할 때도 자주 발생한다.
 
   </div>
 </details>
