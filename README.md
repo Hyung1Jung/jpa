@@ -2956,7 +2956,214 @@ em.createQuery(select p.id1, p.id2 from Parent p); // @IdClass
 복합 키에는 @GenerateValue를 사용할 수 없다. 복합 키를 구성하는 여러 칼럼 중 하나에도 사용할 수 없다.
 
 ### 7.3.3 복합 키 : 식별 관계 매핑
+복합 키와 식별 관계를 알아보자.
 
+![1](https://user-images.githubusercontent.com/43127088/110241047-2523fb80-7f92-11eb-8b8e-b0173d7c1879.PNG)
+
+위의 그림을 보면 부모, 자식, 손자까지 계속 기본 키를 전달하는 식별 관계다.
+식별 관계에서 자식 테이블은 부모 테이블의 기본 키를 포함해서 복합 키를 구성해야 하므로 `@IdClass`나 `EmbeddedId`를 사용해서
+식별자를 매핑해야 한다.
+
+**@IdClass와 식별 관계**
+```java
+@Entity
+public class Parent {
+    @Id
+    @Column(name = "PARENT_ID")
+    private String id;
+
+    private String name;
+}
+```
+```java
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode
+public class ChildId implements Serializable {
+    private String parent;
+    private String childId;
+}
+```
+```java
+@Entity
+@IdClass(ChildId.class)
+public class Child {
+    @Id @ManyToOne
+    @JoinColumn(name = "PARENT_ID")
+    private Parent parent;
+
+    @Id @Column(name = "CHILD_ID")
+    private String childId;
+
+    private String name;
+}
+```
+```java
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode
+public class GrandChildId implements Serializable {
+    private ChildId childId;
+    private String id;
+}
+```
+```java
+@Entity
+@IdClass(GrandChildId.class)
+public class GrandChild {
+    @Id @ManyToOne
+    @JoinColumns({
+            @JoinColumn(name = "PARENT_ID"),
+            @JoinColumn(name = "CHILD_ID")})
+    private Child child;
+
+    @Id @Column(name = "GRANDCHILD_ID")
+    private String id;
+
+    private String name;
+}
+```
+식별 관계는 기본 키와 외래 키를 같이 매핑해야 한다. 따라서 식별자 매핑인 @Id와 연관관계 매핑인 @ManyToOne을 같이 사용하면 된다.
+
+```java
+@id
+@ManyToOne
+@JoinColumn(name = "PARENT_ID")
+public Parent parent;
+```
+
+child 엔티티의 parent 필드를 보면 @Id로 기본 키를 매핑하면서 @ManyToOne과 @JounColumn으로 외래 키를 같이 매핑한다.
+
+**@EmbeddedId와 식별 관계**
+
+@EmbeddedId로 식별 관계를 구성할때는 @MapsId를 사용해야 한다.
+
+```java
+@Entity
+public class Parent {
+    @Id @Column(name = "PARENT_ID")
+    private String id;
+
+    private String name;
+}
+```
+```java
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode
+@Embeddable
+public class ChildId implements Serializable {
+    private String parentId; // @MapsId("parentId) 사용
+
+    @Column(name = "CHILD_ID")
+    private String childId;
+}
+```
+```java
+@Entity
+public class Child {
+
+    @EmbeddedId
+    private ChildId id;
+
+    @MapsId("parentId")
+    @ManyToOne
+    @JoinColumn(name = "PARENT_ID")
+    private Parent parent;
+
+    private String name;
+}
+```
+```java
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode
+@Embeddable
+public class GrandChildId implements Serializable {
+    private ChildId childId; // @MapsId("childId")
+
+    @Column(name = "GRANDCHILD_ID")
+    private String id;
+}
+```
+```java
+@Entity
+public class GrandChild {
+
+    @EmbeddedId
+    private GrandChildId childId;
+
+    @MapsId("childId")
+    @ManyToOne
+    @JoinColumns({
+            @JoinColumn(name = "PARENT_ID"),
+            @JoinColumn(name = "CHILD_ID")})
+    private Child child;
+
+    private String name;
+}
+```
+@EmbeddedId는 식별 관계로 사용할 연고나관계의 속성에 @MaosId를 사용하면 된다. child 엔티티의 parent 필드를 보자.
+
+```java
+import javax.persistence.JoinColumn;
+import javax.persistence.ManyToOne;
+
+@MapsId("parentId")
+@ManyToOne
+@JoinColumnname = "PARENT_ID")
+public Parent parent;
+```
+
+@IdClass와 다른 점은 @Id 대신에 @MapsId를 사용한 정미다. @MapsId는 외래키와 매핑한 연관관계를 기본 키에도 매핑하겠다는
+뜻이다. @MapsId 속성 값은 @EmbeddedId를 사용한 식별자 클래스의 기본 키 필드를 지정하면 된다. 여기서는 childId의
+parentId 필드를 선택했다.
+
+### 7.3.4 비식별 관계로 구현
+식별 관계를 비식별 관계로 변경했던 예제처럼, 방금 예를 들었던 식별 관계 테이블을 그림과 같이 비식별 관계로 변경해보자.
+![2](https://user-images.githubusercontent.com/43127088/110243314-1bec5c00-7f9d-11eb-82b7-23de43203d79.PNG)
+
+```java
+@Entity
+public class Parent {
+    @Id @GeneratedValue
+    @Column(name = "PARENT_ID")
+    private long id;
+
+    private String name;
+}
+```
+```java
+@Entity
+public class Child {
+
+    @Id @GeneratedValue
+    @Column(name = "CHILD_ID")
+    private long id;
+    private String name;
+
+    @ManyToOne
+    @JoinColumn(name = "PARENT_ID")
+    private Parent parent;
+}
+```
+```java
+@Entity
+public class GrandChild {
+
+    @Id @GeneratedValue
+    @Column(name = "GRANDCHILD_ID")
+    private long id;
+    private String name;
+
+    @ManyToOne
+    @JoinColumn(name = "CHILD_ID")
+    private Child child;
+}
+```
+
+식별 관계의 복합 키를 사용한 코드와 비교하면 매핑도 쉽고 코드도 단순하다. 그리고 복합 키가 없으므로 복합 키
+클래스를 만들지 않아도 된다.
 
   </div>
 </details>
