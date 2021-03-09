@@ -3302,12 +3302,214 @@ null로 저장되는 단점이 있다.
 조인 테이블에 대해 앞으로 설명할 내용은 다음과 같다.
 
 - 객체와 테이블을 매핑할 때 조인 컬럼은 @JoinColumn으로 매핑하고 조인 테이블은 @JoinTable로 매핑한다.
-- 조인 테이블은 주로 다대다 관계르 일대다, 다대일로 풀어내기 위해 사용한다. 그렇지만 일대일, 일대다, 다대일 관계에서도 사용한다.
+- 조인 테이블은 주로 다대다 관계를 일대다, 다대일로 풀어내기 위해 사용한다. 그렇지만 일대일, 일대다, 다대일 관계에서도 사용한다.
   지금부터 일대일, 일대다, 다대일, 다대다 관계를 조인 테이블로 매핑해보자. (조인 테이블을 연결 테이블, 링크 테이블로도 부른다.)
   
 ### 일대일 조인 테이블
+일대일 관계를 만들려면 조인 테이블의 외래 키 컬럼 각각에 총 2개의 유니크 제약조건을 걸어야 한다.
 
+![1](https://user-images.githubusercontent.com/43127088/110470623-6b0dca80-811e-11eb-9bca-303470e5b045.jpg)
 
+```java
+//부모
+@Entity
+public class Parent {
+  @Id @GeneratedValue
+  @Column(name = "PARENT_ID")
+  private Long id;
+
+  private String name;
+  
+  @OneToOne
+  @JoinTable(name = "PARENT_CHILD",
+    joinColumns = @JoinColumn(name = "PARENT_ID"),
+    inverseJoinColumns = @JoinColumn(name = "CHILD_ID")
+  )
+  private Child child;
+  ...
+}
+
+//자식
+@Entity
+public class ChiId {
+  @Id @GeneratedValue
+  @Column(name = "CHILD_ID")
+  private Long id;
+
+  private String name;
+
+  @OneToOne(mappedBy = "child")
+  private Parent parent;
+  ...
+}
+```
+
+부모 엔티티를 보면 @JoinColumn 대신에 @JoinTable을 사용했다. @JoinTable의 속성은 다음과 같다.
+- name : 매핑할 조인 테이블 이름
+- joinColumns : 현재 엔티티를 참조하는 외래 키
+- inverseJoinColumns : 반대방향 엔티티를 참조하는 외래 키
+
+양방향으로 매핑하려면 다음 코드를 추가하면 된다.
+```java
+public class child {
+...
+@OneToOne(mappedBy="child")
+private Parent parent;
+}
+```
+
+### 7.4.2 일대다 조인 테이블
+일대다 관계를 만들려면 조인 테이블의 컬럼 중 다(N)와 관련된 컬럼인 CHILD_ID에 유니크 제약 조건을 걸아야 한다.
+(CHILD_ID는 기본 키이므로 유니크 제약조건이 있다.)
+
+![1](https://user-images.githubusercontent.com/43127088/110464297-50375800-8116-11eb-9fe5-b0c16ea55cb8.PNG)
+
+```java
+//부모
+@Entity
+public class Parent {
+  @Id @GeneratedValue
+  @Column(name = "PARENT_ID")
+  private Long id;
+
+  private String name;
+  
+  @OneToMany
+  @JoinTable(name = "PARENT_CHILD",
+    joinColumns = @JoinColumn(name = "PARENT_ID"),
+    inverseJoinColumns = @JoinColumn(name = "CHILD_ID")
+  )
+  private List<Child> child = new ArrayList<>();
+}
+
+//자식
+@Entity
+public class ChiId {
+  @Id @GeneratedValue
+  @Column(name = "CHILD_ID")
+  private Long id;
+  private String name;
+
+  @ManyToOne(mappedBy = "child")
+  private Parent parent;
+}
+```
+
+### 7.4.3 다대일 조인 테이블
+다대일은 일대다에서 방향만 반대이므로 조인 테이블 모양은 일대다에서 설명한 것과 같다.
+
+```java
+//부모
+@Entity
+public class Parent {
+  @Id @GeneratedValue
+  @Column(name = "PARENT_ID")
+  private Long id;
+  private String name;
+  
+  @OneToMany(mappedBy = "parent")
+  private List<Child> child = new ArrayList<>();
+}
+
+//자식
+@Entity
+public class ChiId {
+  @Id @GeneratedValue
+  @Column(name = "CHILD_ID")
+  private Long id;
+  private String name;
+
+  @ManyToOne(optional = false)
+  @JoinTable(name = "PARENT_CHILD",
+    joinColumns = @JoinColumn(name = "CHILD_ID"),
+    inverseJoinColumns = @JoinColumn(name = "PARENT_ID")
+  )
+  private Parent parent;
+}
+```
+### 7.4.4 다대다 조인 테이블
+다대다 관계를 만들려면 조인 테이블의 두 컬럼을 합해서 하나의 복합 유니크 제약조건을 걸어야 한다.(PARENT_ID, CHILD_ID
+는 복합 기본키이므로 유니크 제약조건이 걸려 있다.)
+
+```java
+//부모
+@Entity
+public class Parent {
+  @Id @GeneratedValue
+  @Column(name = "PARENT_ID")
+  private Long id;
+  private String name;
+  
+  @ManyToMany
+  @JoinTable(name = "PARENT_CHILD",
+    joinColumns = @JoinColumn(name = "CHILD_ID"),
+    inverseJoinColumns = @JoinColumn(name = "PARENT_ID")
+  )
+  private List<Child> child = new ArrayList<>();
+}
+
+//자식
+@Entity
+public class ChiId {
+  @Id @GeneratedValue
+  @Column(name = "CHILD_ID")
+  private Long id;
+  private String name;
+}
+```
+
+`참고`
+조인 테이블에 컬럼을 추가하면 @JoinTable 전략을 사용할 없다. 대신에 새로운 엔티티를 만들어서 조인 테이블과 매핑해야 한다.
+
+## 7.5 엔티티 하나에 여러 테이블 매핑
+잘 사용하지는 않지만 `SecondaryTable`을 사용하면 한 엔티티에 여러 테이블을 매핑할 수 있다.
+
+![2](https://user-images.githubusercontent.com/43127088/110475654-7ebc2f80-8124-11eb-964e-458f9999d99b.PNG)
+
+```java
+@Entity
+@Table(name = "BOARD")
+@SecondaryTable(name = "BOARD_DETAIL", pkJoinColumns = @PrimaryKeyJoinColumn(name = "BOARD_DETAIL_ID"))
+public class Board {
+
+    @Id @GeneratedValue
+    @Column(name = "BOARD_ID")
+    private long id;
+
+    private String title;
+
+    @Column(table = "BOARD_DETAIL")
+    private String content;
+}
+```
+
+Board 엔티티는 @Table을 사용해서 BOARD 테이블과 매핑했다. 그리고 @SecondaryTable을 사용해서 BOARD_DETAIL 테이블을 추가로 매핑했다.
+
+`@SecondaryTable` 속성
+- @SecondaryTable.name : 매핑할 다른 테이블의 이름, 예제에서는 테이블명을 BOARD_DETAIL로 지정했다.
+- @SecondaryTable.pkJoinColumns: 매핑할 다른 ㅌ이블의 기본 키 컬럼 속성, 예제에서는 기본 키 컬럼명을 BOARD_DETAIL_ID
+  로지 정했다.
+  
+```java
+@Column(table = "BOARD_DETAIL")
+private String content;
+```
+
+content 필든ㄴ @Column(table = "BOARD_DETAIL")을 사용해서 BOARD_DETAIL 테이블의 컬럼에 매핑했다. title 필드처럼 테이블을
+지정하지 않으면 기본 테이블인 BOARD에 매핑된다.
+
+더 많은 테이블을 매핑하려면 @SecondaryTables를 사용하면 된다.
+
+```java
+@SecondaryTables({
+        @SecondaryTable(name-"BOARD_DETAIL"),
+        @SecondaryTable(name-"BOARD_FILE")
+        
+})
+```
+참고로 @SecondaryTable을 사용해서 두 테이블을 하나의 엔티티에 매핑하는 방법보다는 테이블당 엔티티를 각각 만들어서
+일대일 매핑하는 것을 권장한다. 이 방법은 최적화하기 어렵다. 반면에 일대일 매핑은 원하는 부분만 조회할 수 있고 필요하면
+둘을 함께 조회하면 된다.
   </div>
 </details>
 
