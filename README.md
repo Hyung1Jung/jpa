@@ -3514,9 +3514,64 @@ content 필든ㄴ @Column(table = "BOARD_DETAIL")을 사용해서 BOARD_DETAIL �
 </details>
 
 <details>
-  <summary>9. 프록시와 연관관계 관리</summary>
+  <summary>8. 프록시와 연관관계 관리</summary>
   <div markdown="1">
 
+- 프록시와 즉시로딩, 지연로딩
+
+객체는 객체 그래프로 연관된 객체들을 타색한다. 그런데 객체가 데이터베이스에 저장되어 있으므로 연관된 객체를
+마음껏 탐색하기는 어렵다. JPA 구현체들은 이 문제를 해결하려고 `프록시`라는 기술을 사용한다.
+
+`프록시`를 사용하면 연관된 객체를 처음부터 데이터베이스에서 조회하는 것이 아니라, 실제 사용하는 시점에
+데이터베이스에서 조회할 수 있다.  하지만 자주 함께 사용하는 객체들은 조인을 사용해서 함께 조회하는 것이 효과적이다.
+JPA는 즉시 로딩과 지연 로딩이라는 방법으로 둘을 모두 조회한다.
+
+- 영속성 전이와 고아 객체
+
+JPA는 연관된 객체를 함께 저장하거나 함께 삭제할 수 있는 영속성 전이와 고아 객체 제거라는 편리한 기능을 제공한다.
+
+## 8.1 프록시
+엔티티를 조회할 때 연관된 엔티티들이 항상 사용되는 것은 아니다. 예를 들어 회원 엔티티를 조회할 때 연관된 팀
+엔티티는 비즈니스 로직에 따라 사용될 때도 있지만 그렇지 않을 때도 있다.
+
+```java
+@Entity
+@Getter
+public class Member {
+
+  private String username;
+
+  @ManyToOne
+  private Team team;
+}
+```
+
+```java
+@Entity
+@Getter
+public class Team {
+    
+    private String name;
+}
+```
+
+```java
+public void printUserAndTeam(String memberId) {
+    Member member = em.find(Member.class, memberId);
+    Team team = member.getTeam();
+
+    System.out.println("회원 이름 : " + member.getUserName());
+    System.out.println("소속팀 : " + team.getName());
+}
+```
+
+```java
+public String printUser(String memberId) {
+    Member member = em.find(Member.class, memberId);
+
+    System.out.println("회원 이름 : " + member.getUserName());
+}
+```
   </div>
 </details>
 참고 문헌 :
